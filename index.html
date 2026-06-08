@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!--
+  SECOM HUB v2 — índice (acesso protegido por senha).
+  A lista de páginas é mantida CIFRADA (AES-256-GCM / PBKDF2-SHA256) na constante ENC.
+  Ao desbloquear, a chave fica guardada na sessão do navegador (sessionStorage),
+  liberando as páginas internas (também cifradas) sem pedir a senha de novo.
+  O login expira ao fechar a janela/aba do navegador.
+  Para ATUALIZAR a lista ou as páginas, edite as FONTES em texto (pasta de backup,
+  fora do servidor) e recifre. Detalhes da taxonomia de status: ver AGENT.md.
+-->
+<title>Acesso restrito</title>
+<meta name="description" content="Área restrita — autenticação necessária.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sp-green:#2AE05B; --sp-blue:#4DA3FF; --sp-yellow:#FFD23F; --sp-gray:#9A9AA3;
+  --bg-0:#07070A; --bg-1:#0E0E13; --bg-2:#15151C; --bg-3:#1E1E27; --bg-4:#282833;
+  --border:rgba(255,255,255,.10); --border-strong:rgba(255,255,255,.18); --border-subtle:rgba(255,255,255,.06);
+  --text-hi:#F5F5F7; --text:#D4D4DC; --text-mid:#9A9AA3; --text-lo:#6B6B74;
+  --font-display:'Archivo','Inter',system-ui,sans-serif; --font-body:'Inter',system-ui,sans-serif;
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-font-smoothing:antialiased}
+body{font-family:var(--font-body);background:var(--bg-0);color:var(--text);min-height:100vh;line-height:1.5;overflow-x:hidden}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:
+    radial-gradient(1200px 600px at 15% -10%,rgba(42,224,91,.06),transparent 60%),
+    radial-gradient(1000px 500px at 85% 110%,rgba(255,59,48,.05),transparent 60%),
+    radial-gradient(800px 400px at 50% 50%,rgba(255,210,63,.03),transparent 70%);}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(to right,rgba(255,255,255,.025) 1px,transparent 1px),
+    linear-gradient(to bottom,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:80px 80px;mask-image:radial-gradient(ellipse at 50% 0%,black 20%,transparent 80%);}
+
+.wrap{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:64px 24px 80px}
+
+.brand{display:flex;justify-content:center;margin-bottom:14px}
+.brand svg{height:60px;display:block}
+.intro{text-align:center;margin-bottom:28px}
+.intro .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:1.6px;
+  text-transform:uppercase;color:var(--sp-yellow);background:rgba(255,210,63,.12);border:1px solid rgba(255,210,63,.3);
+  padding:5px 12px;border-radius:999px;margin-bottom:14px}
+.intro p{font-size:14px;color:var(--text-mid);max-width:560px;margin:0 auto}
+
+.legend{display:flex;flex-wrap:wrap;justify-content:center;gap:8px 16px;margin-bottom:22px}
+.legend span{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;font-weight:600;color:var(--text-mid)}
+.legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+.toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:14px 22px;margin-bottom:20px;
+  padding:14px 16px;background:var(--bg-1);border:1px solid var(--border);border-radius:14px}
+.toolbar__group{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.toolbar__label{font-size:10.5px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-lo)}
+.seg{display:inline-flex;background:var(--bg-3);border:1px solid var(--border);border-radius:999px;padding:3px;gap:2px}
+.seg button{appearance:none;border:0;background:transparent;color:var(--text-mid);cursor:pointer;
+  font:inherit;font-size:12px;font-weight:600;padding:6px 13px;border-radius:999px;transition:.2s var(--ease);white-space:nowrap}
+.seg button:hover{color:var(--text-hi)}
+.seg button.is-active{background:var(--text-hi);color:var(--bg-0)}
+.chips{display:flex;flex-wrap:wrap;gap:7px}
+.chip{appearance:none;cursor:pointer;font:inherit;font-size:11.5px;font-weight:700;
+  display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:999px;
+  background:var(--bg-3);border:1px solid var(--border);color:var(--text-lo);transition:.2s var(--ease)}
+.chip::before{content:"";width:8px;height:8px;border-radius:50%;background:currentColor;opacity:.5}
+.chip:hover{color:var(--text)}
+.chip.is-active{background:var(--accent-soft);border-color:var(--accent-border);color:var(--accent)}
+.chip.is-active::before{opacity:1;background:var(--accent)}
+
+.list{display:flex;flex-direction:column;gap:12px}
+.row{
+  display:flex;align-items:center;gap:18px;text-decoration:none;
+  background:var(--bg-2);border:1px solid var(--border);border-left:3px solid var(--accent);
+  border-radius:14px;padding:17px 20px;transition:.28s var(--ease);
+}
+.row:hover{background:var(--bg-3);border-color:var(--border-strong);border-left-color:var(--accent);transform:translateX(4px)}
+.row__body{flex:1;min-width:0}
+.row__title{display:flex;align-items:center;gap:9px;font-family:var(--font-display);font-size:16.5px;font-weight:800;color:var(--text-hi);letter-spacing:-.3px}
+.row__sub{font-size:12.5px;color:var(--text-mid);margin-top:3px;line-height:1.4}
+.dock{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex-shrink:0}
+.badge{display:inline-flex;align-items:center;gap:7px;font-size:11px;font-weight:700;
+  padding:5px 11px;border-radius:999px;white-space:nowrap;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-border)}
+.badge::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.dock__date{font-size:10.5px;color:var(--text-lo);white-space:nowrap;display:flex;align-items:center;gap:5px}
+.dock__date svg{width:11px;height:11px;opacity:.7}
+.row__arrow{flex-shrink:0;color:var(--text-lo);transition:.28s var(--ease)}
+.row:hover .row__arrow{color:var(--accent);transform:translateX(3px)}
+.row__arrow svg{width:18px;height:18px;display:block}
+
+.row.is-disabled{opacity:.5;pointer-events:none;border-left-color:var(--text-lo)}
+.empty{text-align:center;padding:40px 20px;color:var(--text-lo);font-size:13px}
+
+.t-producao{--accent:var(--sp-green); --accent-soft:rgba(42,224,91,.14); --accent-border:rgba(42,224,91,.35)}
+.t-confiavel{--accent:var(--sp-blue); --accent-soft:rgba(77,163,255,.14); --accent-border:rgba(77,163,255,.35)}
+.t-conceito{--accent:var(--sp-yellow); --accent-soft:rgba(255,210,63,.14); --accent-border:rgba(255,210,63,.35)}
+.t-rascunho{--accent:var(--sp-gray); --accent-soft:rgba(154,154,163,.14); --accent-border:rgba(154,154,163,.35)}
+
+.foot{text-align:center;margin-top:42px;font-size:11.5px;color:var(--text-lo)}
+.foot a{color:var(--text-mid);text-decoration:none;border-bottom:1px solid var(--border)}
+.foot a:hover{color:var(--text-hi)}
+
+.gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+  padding:24px;background:radial-gradient(1000px 600px at 50% -10%,rgba(42,224,91,.06),transparent 60%),var(--bg-0)}
+.gate[hidden]{display:none}
+.gate__card{position:relative;width:100%;max-width:380px;text-align:center;
+  background:var(--bg-1);border:1px solid var(--border);border-radius:18px;padding:36px 30px 30px}
+.gate__lock{width:54px;height:54px;margin:0 auto 18px;display:grid;place-items:center;border-radius:14px;
+  background:rgba(255,210,63,.12);border:1px solid rgba(255,210,63,.3);color:var(--sp-yellow)}
+.gate__lock svg{width:26px;height:26px}
+.gate__title{font-family:var(--font-display);font-size:21px;font-weight:800;color:var(--text-hi);letter-spacing:-.3px;margin-bottom:6px}
+.gate__sub{font-size:13px;color:var(--text-mid);margin-bottom:22px}
+.gate__input{width:100%;background:var(--bg-3);border:1px solid var(--border);border-radius:12px;
+  color:var(--text-hi);font:inherit;font-size:15px;padding:13px 15px;outline:none;text-align:center;letter-spacing:1px;transition:.2s var(--ease)}
+.gate__input:focus{border-color:var(--sp-green);background:var(--bg-2)}
+.gate__btn{width:100%;margin-top:12px;background:var(--text-hi);color:var(--bg-0);border:0;border-radius:12px;
+  font:inherit;font-size:14px;font-weight:700;padding:13px;cursor:pointer;transition:.2s var(--ease)}
+.gate__btn:hover{transform:translateY(-1px)}
+.gate__btn:disabled{opacity:.6;cursor:wait;transform:none}
+.gate__err{min-height:18px;margin-top:12px;font-size:12.5px;font-weight:600;color:#FF6B61}
+.gate.is-shake .gate__card{animation:shake .4s var(--ease)}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-5px)}80%{transform:translateX(5px)}}
+.gate__foot{margin-top:20px;font-size:10.5px;color:var(--text-lo);line-height:1.5}
+
+/* evita flash do conteúdo antes da checagem de sessão */
+#app[hidden]{display:none}
+
+@media(max-width:600px){
+  .wrap{padding:40px 16px 56px}
+  .brand svg{height:46px}
+  .toolbar{gap:12px 16px;padding:12px 13px}
+  .toolbar__group{width:100%}
+  .seg{width:100%;justify-content:space-between}
+  .seg button{flex:1;padding:7px 6px;text-align:center}
+  .row{flex-wrap:wrap;gap:10px;padding:15px 16px}
+  .row__title{font-size:15.5px}
+  .dock{flex-direction:row;align-items:center;width:100%;justify-content:space-between;order:3}
+  .row__arrow{display:none}
+}
+@media(max-width:380px){
+  .brand svg{height:40px}
+  .dock{flex-wrap:wrap;gap:6px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== GATE DE SENHA ===================== -->
+<div class="gate" id="gate" hidden>
+  <form class="gate__card" id="gateForm" autocomplete="off">
+    <div class="gate__lock">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <h1 class="gate__title">Acesso restrito</h1>
+    <p class="gate__sub">É necessária uma senha de administrador para entrar.</p>
+    <input type="password" id="pw" class="gate__input" placeholder="Senha de administrador" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" />
+    <button type="submit" class="gate__btn" id="gateBtn">Entrar</button>
+    <div class="gate__err" id="gateErr" role="alert"></div>
+    <div class="gate__foot">Todos os materiais disponíveis são não-oficiais e foram gerados por inteligência artificial generativa.</div>
+  </form>
+</div>
+
+<!-- ===================== CONTEÚDO (revelado após desbloqueio) ===================== -->
+<div class="wrap" id="app" hidden>
+
+  <div class="brand">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" role="img" aria-label="SECOM HUB">
+      <defs><linearGradient id="hub" x1="0%" y1="0%" x2="100%" y2="0%">
+        <stop offset="0%" stop-color="#E2231A"/><stop offset="50%" stop-color="#25C14A"/><stop offset="100%" stop-color="#9A9AA3"/>
+      </linearGradient></defs>
+      <g transform="translate(8,18)">
+        <path d="M4 4 L18 18 M18 4 L4 18" stroke="#E2231A" stroke-width="5" stroke-linecap="round"/>
+        <path d="M26 12 L31 18 L42 6" stroke="#25C14A" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        <path d="M50 4 L50 18 L62 11 Z" fill="#9A9AA3"/>
+      </g>
+      <text x="82" y="46" font-family="Archivo,Inter,system-ui,sans-serif" font-size="38" font-weight="900" letter-spacing="-1" fill="#F5F5F7">SECOM</text>
+      <text x="228" y="46" font-family="Archivo,Inter,system-ui,sans-serif" font-size="38" font-weight="900" letter-spacing="-1" fill="url(#hub)">HUB</text>
+      <rect x="82" y="54" width="236" height="3" rx="1.5" fill="url(#hub)"/>
+      <text x="82" y="72" font-family="Inter,system-ui,sans-serif" font-size="9" font-weight="600" letter-spacing="2" fill="#9A9AA3">COMUNICAÇÃO PÚBLICA · GOV.SP</text>
+    </svg>
+  </div>
+
+  <div class="intro">
+    <div class="eyebrow">Ambiente de desenvolvimento · Hub v2</div>
+    <p>Índice das páginas em construção. Cada item indica seu status de maturidade e a data da última atualização.</p>
+  </div>
+
+  <div class="legend">
+    <span><i style="background:var(--sp-green)"></i>Em produção</span>
+    <span><i style="background:var(--sp-blue)"></i>Protótipo confiável</span>
+    <span><i style="background:var(--sp-yellow)"></i>Prova de conceito</span>
+    <span><i style="background:var(--sp-gray)"></i>Rascunho inicial</span>
+  </div>
+
+  <div class="toolbar" id="toolbar">
+    <div class="toolbar__group">
+      <span class="toolbar__label">Ordenar</span>
+      <div class="seg" id="sortSeg" role="group" aria-label="Ordenar páginas">
+        <button type="button" data-sort="date_desc" class="is-active">Recentes</button>
+        <button type="button" data-sort="date_asc">Antigos</button>
+        <button type="button" data-sort="alpha_asc">A–Z</button>
+        <button type="button" data-sort="alpha_desc">Z–A</button>
+      </div>
+    </div>
+    <div class="toolbar__group">
+      <span class="toolbar__label">Status</span>
+      <div class="chips" id="statusChips" role="group" aria-label="Filtrar por status">
+        <button type="button" class="chip t-producao is-active" data-status="producao">Em produção</button>
+        <button type="button" class="chip t-confiavel is-active" data-status="confiavel">Confiável</button>
+        <button type="button" class="chip t-conceito is-active" data-status="conceito">Conceito</button>
+        <button type="button" class="chip t-rascunho is-active" data-status="rascunho">Rascunho</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="list" id="list" aria-label="Páginas do Hub"></nav>
+
+  <div class="foot">SECOM · Governo do Estado de São Paulo — índice interno de desenvolvimento. · <a href="#" id="logout">Sair</a></div>
+</div>
+
+<script>
+// ===========================================================================
+// Conteúdo CIFRADO. Sem a senha, o array de páginas não é legível no fonte.
+// AES-256-GCM, chave derivada via PBKDF2-SHA256. A chave derivada fica na
+// sessão (sessionStorage) para liberar as páginas internas sem novo login.
+// ===========================================================================
+const ENC = {"iv":"aojOV/9EBzHDMb+3","data":"HDhH5CJKkToAVXHdrBSBeTyPbeCj0DLwWwexVteKn1t+xA20bAbajFP5HX3ltAIFh4YQ7EMwtFQ2a57eH1Hx3b5LRkxelwOMvrzNOgOr7mcyiYDsZW3GsSpSwvBVgHwYh986hkg/CGajnbJHtiV4T/uOD4E1RHgX20GXHskZO9IBCvYfAgjxsMF7o+piWJ7rsQYo7bUsPb/T2ipM859+TXovJ3wnS5XQcRGSyB5BggRV+inB7ywbymxtkZ/QsZJK+C+fBP366PxfG2OPPEoAKCYv/aNsBtL7mCS8fqs6/9xNxL7x+vbgEzmkjclf3tm1nT0k+nDyTHKli9FtnY93AOO0yDS/UK4cuiatFRN3HuaLFZfMBzwvt8RTth/PZBAZpuaT+Vf1fGycCCHVcSopa1oHZ15eTFzrk26ZNTNvloEu9dO4cOQKLRNVG5bTZ5YhneIzBwwy1wy2wECOi+q7moghBuUeqEmjSsA8xi96iSb3WgMvaudFhRYxaSAakLMaXTU7n+I+Krn4puuh1Frz2ACmCK8TvvJatA2EwE+S4tOuO+vMKWx81pn8ZiRVepBVu+2+FrSu7h1oRl7m7D5BuM5hs/brBREOrggFANNNSFVHk1gaBri2ffRe47Rv1lD5CUXo+VoSgfiXBMujZfA80xxxcJy4A/Tlsf2X+Qy7VyVXGlf8ctfDLMb+yTvJoTxtsho/jgGX+lj5wSTxUphj4kfNPdEHmzCFiD7pD1vo4NHlT6rBrxtif/jnuAW5UDhScP48IovR42mkiqbLEKZjhqvZdkgrg/hTc04VJdUtMHGlmqO57hFo7T4USCI4tX17hVyzFaHMMsOFATXGfpwg4h0SuNAKeDXUSuHJL0AC8l5ytpnbsppOq0MYYkXTbApJryg1o+sEQSHpYzuKY5vQrXszLUGyrY//8436//4MJKAqTaM+BDuf1vyexfkYByxiVFanFo5kTVI/kwWKrCcX24MW/dKSlF0hPwDqNJsArqXETDs2g2yjj80vcdQiGRnJg+eGHTm2Z0j9MmmQHgCcovxbsOpJBaKdUPusnFBOSW73LBeiPWa+4vbspVhIYWCuoHMGoN7yFA6pcUlBMNdKCHtazZQHdaNtjl7bvkYmcgrRyNX/hb+zNtWw2DPkSd2Ih5iYWS5WKOwPOepWdVdBsxpAvdTGkI+0zxTxOuRWIhG2NsUfq3LhPPpSeeEK4f4Vw17CsFV6VaCbTHrh34oZWaEnkeep9YorV9DjeBJNw+NXlegBZYZ3cuPC5KPqHilNUfJnfhi2ykHNKWCoefkri+4a7Gy3jtrEYpRG5jEtz9m32F/o6v0JnGFYxuc1zdSOh/veVxDbWu0cUJP8AUJ+ZPjs+mwIGdIKqtE9nK2BR4qiRWWFRzK8JuZfMRW3WvX+wqOQ/wAGx4QnwoSDmTVPPh6xHoMOzYxWqaIsdl2/q4+QqqGy7NBrqMwW2+zyy9INM7Dkzc05x+S/af7l0KWt26YGKpkZx5HTDSInBoT3mFsskQ7A7io9eLoEaE4Xox84ze2LFmCw9FW884oRrpNU/e0VriY/Rzzcgeu55RC0a7e4VBL5RD901vVlDYQunh+bqnBsMwdcGeoX0iVixWt2exmengrT4ibRuxp/WFjsfp0pMJCkvBQP37lseokFzYzwYTNkKjHYAbH7yIieqM7JznYlX9eOZv6J3/GD3JKtuIOFU3URl+nlnizmPEJqJ9WMRBMxscs3CJvbBLm1zGfE7jMriJDm7YPvWRmQ3XpXPYE0ZmsY4djFiB77CbZa/LfJ7anf7RvHyTE="};   // { iv, data } — lista cifrada
+const KDF = {"salt":"c44ynrgjxTfgS2L9lwVzjQ==","iter":250000};           // { salt, iter } — derivação da chave a partir da senha
+const SS_KEY = 'hub_k';
+
+const STATUS = {
+  producao:  { label:'Em produção',         cls:'t-producao'  },
+  confiavel: { label:'Protótipo confiável',  cls:'t-confiavel' },
+  conceito:  { label:'Prova de conceito',    cls:'t-conceito'  },
+  rascunho:  { label:'Rascunho inicial',     cls:'t-rascunho'  }
+};
+
+const CAL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>';
+const ARR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg>';
+
+let PAGINAS = [];
+const state = { sort:'date_desc', statuses:new Set(['producao','confiavel','conceito','rascunho']) };
+
+// ---------- util base64 <-> bytes ----------
+function b64ToBytes(s){ const bin=atob(s); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i); return u; }
+function bytesToB64(u){ let s=''; for(const b of u) s+=String.fromCharCode(b); return btoa(s); }
+
+// ---------- cripto ----------
+async function deriveRaw(password){
+  const km = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), {name:'PBKDF2'}, false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', salt:b64ToBytes(KDF.salt), iterations:KDF.iter, hash:'SHA-256' }, km, 256);
+  return new Uint8Array(bits);
+}
+async function decryptListWithRaw(raw){
+  const key = await crypto.subtle.importKey('raw', raw, {name:'AES-GCM'}, false, ['decrypt']);
+  const ptBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv:b64ToBytes(ENC.iv) }, key, b64ToBytes(ENC.data));
+  return JSON.parse(new TextDecoder().decode(ptBuf));
+}
+
+// ---------- retorno pós-login (?return=) ----------
+function getReturn(){
+  const r = new URLSearchParams(location.search).get('return');
+  return (r && /^[\w.-]+\.html$/.test(r) && !r.includes('..')) ? r : null;
+}
+
+// ---------- ordenação ----------
+function dateKey(s){ const m=/^(\d{2})\/(\d{2})\/(\d{4})$/.exec((s||'').trim()); return m ? (+m[3])*10000+(+m[2])*100+(+m[1]) : 0; }
+function sortList(arr){
+  const a = arr.slice();
+  switch(state.sort){
+    case 'date_asc':   a.sort((x,y)=> dateKey(x.data)-dateKey(y.data) || x.titulo.localeCompare(y.titulo,'pt-BR')); break;
+    case 'alpha_asc':  a.sort((x,y)=> x.titulo.localeCompare(y.titulo,'pt-BR',{sensitivity:'base'})); break;
+    case 'alpha_desc': a.sort((x,y)=> y.titulo.localeCompare(x.titulo,'pt-BR',{sensitivity:'base'})); break;
+    case 'date_desc':
+    default:           a.sort((x,y)=> dateKey(y.data)-dateKey(x.data) || x.titulo.localeCompare(y.titulo,'pt-BR')); break;
+  }
+  return a;
+}
+
+// ---------- render ----------
+const listEl = document.getElementById('list');
+function render(){
+  const items = sortList(PAGINAS.filter(p => state.statuses.has(p.status)));
+  listEl.innerHTML = '';
+  if(!items.length){ const d=document.createElement('div'); d.className='empty'; d.textContent='Nenhuma página com os status selecionados.'; listEl.appendChild(d); return; }
+  items.forEach(p => {
+    const st = STATUS[p.status] || STATUS.rascunho;
+    const a = document.createElement('a');
+    a.className = 'row ' + (p.inativo ? 'is-disabled t-rascunho' : st.cls);
+    a.href = p.inativo ? '#' : p.href;
+    if(p.inativo) a.setAttribute('aria-disabled','true');
+    const badge = p.inativo ? 'Indisponível' : st.label;
+    a.innerHTML = `
+      <div class="row__body">
+        <div class="row__title">${p.titulo}</div>
+        <div class="row__sub">${p.sub}</div>
+      </div>
+      <div class="dock">
+        <span class="badge">${badge}</span>
+        <span class="dock__date">${CAL} Atualizado em ${p.data}</span>
+      </div>
+      <span class="row__arrow">${ARR}</span>`;
+    listEl.appendChild(a);
+  });
+}
+
+// ---------- toolbar ----------
+document.getElementById('sortSeg').addEventListener('click', e => {
+  const btn=e.target.closest('button[data-sort]'); if(!btn) return;
+  state.sort=btn.dataset.sort;
+  document.querySelectorAll('#sortSeg button').forEach(b=>b.classList.toggle('is-active', b===btn));
+  render();
+});
+document.getElementById('statusChips').addEventListener('click', e => {
+  const btn=e.target.closest('button[data-status]'); if(!btn) return;
+  const s=btn.dataset.status;
+  if(state.statuses.has(s)) state.statuses.delete(s); else state.statuses.add(s);
+  btn.classList.toggle('is-active', state.statuses.has(s));
+  render();
+});
+document.getElementById('logout').addEventListener('click', e => {
+  e.preventDefault();
+  try{ sessionStorage.removeItem(SS_KEY); }catch(_){}
+  location.reload();
+});
+
+// ---------- revelar app ----------
+function revealApp(){
+  const g=document.getElementById('gate'); if(g) g.remove();
+  document.getElementById('app').hidden=false;
+  render();
+}
+
+// ---------- gate ----------
+const gate=document.getElementById('gate');
+const gateForm=document.getElementById('gateForm');
+const gateBtn=document.getElementById('gateBtn');
+const pwInput=document.getElementById('pw');
+const gateErr=document.getElementById('gateErr');
+
+function showGate(){ gate.hidden=false; setTimeout(()=>pwInput.focus(),50); }
+
+gateForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  const pw=pwInput.value; if(!pw) return;
+  gateBtn.disabled=true; gateErr.textContent=''; gateBtn.textContent='Verificando…';
+  try{
+    const raw=await deriveRaw(pw);
+    const data=await decryptListWithRaw(raw);   // lança se a senha estiver errada
+    try{ sessionStorage.setItem(SS_KEY, bytesToB64(raw)); }catch(_){}
+    const ret=getReturn();
+    if(ret){ location.replace(ret); return; }
+    PAGINAS=data; revealApp();
+  }catch(err){
+    gateBtn.disabled=false; gateBtn.textContent='Entrar';
+    gateErr.textContent='Senha incorreta. Tente novamente.';
+    gate.classList.add('is-shake'); setTimeout(()=>gate.classList.remove('is-shake'),450);
+    pwInput.value=''; pwInput.focus();
+  }
+});
+
+// ---------- auto-login pela sessão ----------
+(async()=>{
+  let raw=null;
+  try{ const b=sessionStorage.getItem(SS_KEY); if(b) raw=b64ToBytes(b); }catch(_){}
+  if(raw){
+    try{
+      const data=await decryptListWithRaw(raw);
+      const ret=getReturn();
+      if(ret){ location.replace(ret); return; }
+      PAGINAS=data; revealApp(); return;
+    }catch(_){ try{ sessionStorage.removeItem(SS_KEY); }catch(__){} }
+  }
+  showGate();
+})();
+</script>
+</body>
+</html>
